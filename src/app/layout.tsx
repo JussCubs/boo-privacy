@@ -7,14 +7,14 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0a0a0a',
+  themeColor: '#000000',
 }
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://booprivacy.com'),
-  title: 'Boo Privacy | Your Digital Guardian is Coming',
-  description: 'Boo Privacy is building the next generation of privacy-first tools. A powerful web app to protect your digital identity, secure your data, and keep prying eyes away. Coming soon.',
-  keywords: ['privacy', 'security', 'data protection', 'digital privacy', 'online security', 'privacy tools', 'secure browsing', 'data encryption', 'privacy app', 'cybersecurity'],
+  title: 'Boo Privacy',
+  description: 'Something is watching over you. Coming soon.',
+  keywords: ['boo privacy', 'privacy', 'security'],
   authors: [{ name: 'Boo Privacy' }],
   creator: 'Boo Privacy',
   publisher: 'Boo Privacy',
@@ -34,21 +34,21 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: 'https://booprivacy.com',
     siteName: 'Boo Privacy',
-    title: 'Boo Privacy | Your Digital Guardian is Coming',
-    description: 'The next generation of privacy-first tools. Protect your digital identity, secure your data, and keep prying eyes away.',
+    title: 'Boo Privacy',
+    description: 'Something is watching over you. Coming soon.',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'Boo Privacy - Your Digital Guardian',
+        alt: 'Boo Privacy',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Boo Privacy | Your Digital Guardian is Coming',
-    description: 'The next generation of privacy-first tools. Protect your digital identity and secure your data.',
+    title: 'Boo Privacy',
+    description: 'Something is watching over you. Coming soon.',
     images: ['/og-image.png'],
     creator: '@booprivacy',
   },
@@ -71,7 +71,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className="bg-boo-black text-white antialiased">
+      <body className="bg-black text-white antialiased">
         {children}
       </body>
     </html>
