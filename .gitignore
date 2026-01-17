@@ -34,5 +34,18 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Cache
+.cache/
+
+# ZK circuit files (copied during postinstall)
+public/shield.wasm
+public/shield.zkey
+
 # Context
 .context/

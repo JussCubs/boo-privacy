@@ -1,0 +1,274 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --boo-bg: #0a0a0a;
+  --boo-card: #111111;
+  --boo-border: #1f1f1f;
+  --boo-text: #ffffff;
+  --boo-dim: #6b7280;
+  --boo-primary: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background-color: var(--boo-bg);
+  color: var(--boo-text);
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+/* ===== BASE STYLES ===== */
+
+.btn-primary {
+  @apply bg-boo-primary hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200;
+}
+
+.btn-secondary {
+  @apply bg-boo-secondary hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200;
+}
+
+.card {
+  @apply bg-boo-card border border-boo-border rounded-xl p-4;
+}
+
+.input {
+  @apply w-full bg-boo-bg border border-boo-border rounded-lg px-3 py-2 text-white placeholder-boo-dim focus:outline-none focus:border-boo-primary transition-colors;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ===== ANIMATIONS ===== */
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Float animation for Boo */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  25% { transform: translateY(-6px) rotate(-1deg); }
+  50% { transform: translateY(-3px) rotate(0deg); }
+  75% { transform: translateY(-8px) rotate(1deg); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Glow pulse */
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.animate-glow-pulse {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+/* Spin */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Shake */
+@keyframes shake {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  10% { transform: translateX(-3px) rotate(-3deg); }
+  20% { transform: translateX(3px) rotate(3deg); }
+  30% { transform: translateX(-3px) rotate(-2deg); }
+  40% { transform: translateX(3px) rotate(2deg); }
+  50% { transform: translateX(-2px) rotate(-1deg); }
+  60% { transform: translateX(2px) rotate(1deg); }
+  70% { transform: translateX(-1px) rotate(0deg); }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+/* Bounce in */
+@keyframes bounceIn {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-bounce-in {
+  animation: bounceIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+}
+
+/* Slide up */
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s ease-out forwards;
+}
+
+/* Eye glow */
+@keyframes eyeGlow {
+  0%, 100% { filter: drop-shadow(0 0 3px #ef4444) drop-shadow(0 0 6px #ef4444); }
+  50% { filter: drop-shadow(0 0 8px #ef4444) drop-shadow(0 0 16px #ef4444); }
+}
+
+.ghost-eyes-glow {
+  animation: eyeGlow 2s ease-in-out infinite;
+}
+
+/* Intense eye glow for celebrations */
+.boo-eyes-glow {
+  filter: drop-shadow(0 0 8px #ef4444) drop-shadow(0 0 16px rgba(239, 68, 68, 0.5));
+}
+
+.boo-eyes-intense {
+  filter: drop-shadow(0 0 15px #ef4444) drop-shadow(0 0 30px #ff6b6b);
+  animation: eyeIntense 0.3s ease-in-out infinite;
+}
+
+@keyframes eyeIntense {
+  0%, 100% { filter: drop-shadow(0 0 15px #ef4444) drop-shadow(0 0 30px #ff6b6b); }
+  50% { filter: drop-shadow(0 0 25px #ef4444) drop-shadow(0 0 50px #ff6b6b); }
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(90deg, #ef4444, #f97316, #fbbf24, #ef4444);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 3s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Progress ring animation */
+@keyframes progressRing {
+  0% { stroke-dashoffset: 283; }
+  100% { stroke-dashoffset: 0; }
+}
+
+/* Success flash */
+@keyframes successFlash {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(34, 197, 94, 0.2); }
+  100% { background-color: transparent; }
+}
+
+.animate-success-flash {
+  animation: successFlash 0.5s ease-out;
+}
+
+/* Number input - hide spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Selection color */
+::selection {
+  background-color: rgba(239, 68, 68, 0.3);
+  color: white;
+}
+
+/* Focus ring */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid rgba(239, 68, 68, 0.5);
+  outline-offset: 2px;
+}
+
+/* Tooltip styles */
+.tooltip {
+  @apply absolute z-50 px-3 py-2 text-sm bg-boo-card border border-boo-border rounded-lg shadow-xl;
+  @apply opacity-0 invisible transition-all duration-200;
+  @apply pointer-events-none;
+}
+
+.tooltip-trigger:hover .tooltip {
+  @apply opacity-100 visible;
+}
+
+/* Info icon */
+.info-icon {
+  @apply inline-flex items-center justify-center w-4 h-4 text-xs rounded-full;
+  @apply bg-white/10 text-white/40 hover:text-white/80 hover:bg-white/20;
+  @apply cursor-help transition-all duration-200;
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(17, 17, 17, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Smooth transitions globally */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Disable transitions for performance-sensitive elements */
+.no-transition * {
+  transition: none !important;
+}
