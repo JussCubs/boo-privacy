@@ -718,7 +718,15 @@ export default function WalletGenerator() {
                 </svg>
               </button>
               <button
-                onClick={selectAllWallets}
+                onClick={() => {
+                  // Select only non-archived wallets
+                  if (walletSet) {
+                    const nonArchivedIndices = walletSet.wallets
+                      .filter(w => !archivedWallets.includes(w.index))
+                      .map(w => w.index);
+                    setSelectedWallets(nonArchivedIndices);
+                  }
+                }}
                 className="text-[10px] uppercase tracking-wider text-white/40 hover:text-white/80 transition-colors px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10"
               >
                 All

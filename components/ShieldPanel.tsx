@@ -241,7 +241,9 @@ export default function ShieldPanel() {
         celebrate('shield', 8);
       } else {
         setProcessingStatus('Generating ZK proof...');
-        const lamports = Math.floor(amountNum * LAMPORTS_PER_SOL);
+        // Add withdrawal fees so recipient receives the full intended amount
+        // (Privacy Cash SDK deducts fees from the withdrawal amount)
+        const lamports = Math.floor((amountNum + withdrawalFees) * LAMPORTS_PER_SOL);
         const client = await getClientAsync();
         await client.withdraw(lamports, walletAddressRef.current);
 
