@@ -186,6 +186,8 @@ export default function WalletGenerator() {
       const destinationPubkey = new PublicKey(mainWalletAddress);
       let totalConsolidated = 0;
 
+      const failedWallets: string[] = [];
+
       for (const { wallet } of walletsToConsolidate) {
         try {
           const lamportBalance = await connection.getBalance(wallet.keypair.publicKey);
@@ -204,11 +206,18 @@ export default function WalletGenerator() {
             await sendAndConfirmTransaction(connection, tx, [wallet.keypair], { commitment: 'confirmed' });
             totalConsolidated += amountToSend / LAMPORTS_PER_SOL;
           }
-        } catch {}
+        } catch (error) {
+          console.error(`[Consolidate] Failed for wallet #${wallet.index}:`, error);
+          failedWallets.push(`#${wallet.index}`);
+        }
         await new Promise(r => setTimeout(r, 200));
       }
 
-      toast.success(`Consolidated ${totalConsolidated.toFixed(4)} SOL`, { id: toastId });
+      if (failedWallets.length > 0) {
+        toast.error(`Failed to consolidate wallets: ${failedWallets.join(', ')}`, { id: toastId });
+      } else {
+        toast.success(`Consolidated ${totalConsolidated.toFixed(4)} SOL`, { id: toastId });
+      }
       await refreshAllBalances();
     } catch (error: any) {
       toast.error(error.message || 'Failed', { id: toastId });

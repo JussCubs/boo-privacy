@@ -23,6 +23,7 @@ export function patchFetchForPrivacyCash(): void {
     init?: RequestInit
   ): Promise<Response> {
     let url: string;
+    let effectiveInit: RequestInit | undefined = init;
 
     if (typeof input === 'string') {
       url = input;
@@ -30,6 +31,21 @@ export function patchFetchForPrivacyCash(): void {
       url = input.toString();
     } else if (input instanceof Request) {
       url = input.url;
+      // Extract properties from Request object when init is not provided
+      if (!init) {
+        effectiveInit = {
+          method: input.method,
+          headers: input.headers,
+          body: input.body,
+          mode: input.mode,
+          credentials: input.credentials,
+          cache: input.cache,
+          redirect: input.redirect,
+          referrer: input.referrer,
+          referrerPolicy: input.referrerPolicy,
+          integrity: input.integrity,
+        };
+      }
     } else {
       url = String(input);
     }
@@ -44,14 +60,14 @@ export function patchFetchForPrivacyCash(): void {
 
         console.log(`[Fetch Interceptor] Proxying ${url} -> ${proxyUrl}`);
 
-        // Merge headers if init exists
-        const headers = new Headers(init?.headers);
+        // Merge headers if effectiveInit exists
+        const headers = new Headers(effectiveInit?.headers);
         if (!headers.has('Content-Type')) {
           headers.set('Content-Type', 'application/json');
         }
 
         return originalFetch(proxyUrl, {
-          ...init,
+          ...effectiveInit,
           headers,
         });
       } catch (error) {

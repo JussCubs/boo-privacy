@@ -370,7 +370,15 @@ export default function ShieldPanel() {
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xl font-bold text-white placeholder-white/20 focus:outline-none focus:border-white/20 transition-colors"
             />
             <button
-              onClick={() => setAmount(Math.max(0, availableBalance - (mode === 'shield' ? 0.01 : 0)).toString())}
+              onClick={() => {
+                // Calculate max amount that satisfies totalCost <= availableBalance
+                // Shield: totalCost = amount * 1.005, so amount = balance / 1.005
+                // Unshield: totalCost = amount * 1.0035 + 0.006, so amount = (balance - 0.006) / 1.0035
+                const maxAmount = mode === 'shield'
+                  ? availableBalance / (1 + PROTOCOL_FEE_RATE)
+                  : (availableBalance - WITHDRAWAL_RENT) / (1 + WITHDRAWAL_FEE_RATE);
+                setAmount(Math.max(0, maxAmount).toFixed(6));
+              }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-white/40 hover:text-white/80 transition-colors px-2 py-1 rounded bg-white/5"
             >
               Max

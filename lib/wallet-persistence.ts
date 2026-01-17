@@ -66,11 +66,32 @@ function generateCacheKey(seedPhrase: string): string {
   return `${WALLET_CACHE_PREFIX}${Math.abs(hash).toString(36)}`;
 }
 
-// Get obfuscation key (based on browser fingerprint + static salt)
+const OBFUSCATION_KEY_STORAGE = 'boo_obfuscation_key';
+
+// Get obfuscation key (stable key stored in localStorage on first use)
 function getObfuscationKey(): string {
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : 'default';
-  const lang = typeof navigator !== 'undefined' ? navigator.language : 'en';
-  return `boo_${ua.slice(0, 20)}_${lang}_privacy`;
+  if (typeof window === 'undefined') {
+    return 'boo_default_server_key_privacy';
+  }
+
+  try {
+    // Try to get existing stable key from localStorage
+    const existingKey = localStorage.getItem(OBFUSCATION_KEY_STORAGE);
+    if (existingKey) {
+      return existingKey;
+    }
+
+    // Generate a new stable key on first use
+    const randomBytes = new Uint8Array(32);
+    crypto.getRandomValues(randomBytes);
+    const newKey = `boo_${Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('')}_privacy`;
+
+    localStorage.setItem(OBFUSCATION_KEY_STORAGE, newKey);
+    return newKey;
+  } catch {
+    // Fallback for environments without localStorage access
+    return 'boo_fallback_key_privacy';
+  }
 }
 
 /**
