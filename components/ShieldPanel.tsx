@@ -89,8 +89,20 @@ export default function ShieldPanel() {
 
   // Calculate fee
   const amountNum = parseFloat(amount) || 0;
+
+  // Privacy Cash withdrawal fees (for unshield)
+  const WITHDRAWAL_FEE_RATE = 0.0035; // 0.35%
+  const WITHDRAWAL_RENT = 0.006; // 0.006 SOL rent
+
+  // Shield mode: protocol fee on deposit
+  // Unshield mode: withdrawal fees from shielded balance
   const protocolFee = mode === 'shield' ? amountNum * PROTOCOL_FEE_RATE : 0;
-  const totalCost = amountNum + protocolFee;
+  const withdrawalFees = mode === 'unshield' ? (amountNum * WITHDRAWAL_FEE_RATE) + WITHDRAWAL_RENT : 0;
+
+  const totalCost = mode === 'shield'
+    ? amountNum + protocolFee // Shield: amount + 0.5% protocol fee from public
+    : amountNum + withdrawalFees; // Unshield: amount + fees from shielded balance
+
   const availableBalance = mode === 'shield' ? publicBalance : shieldedBalance;
   const canExecute = amountNum > 0 && totalCost <= availableBalance;
 

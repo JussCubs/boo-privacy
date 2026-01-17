@@ -219,15 +219,15 @@ export default function FundingPanel() {
       setFundingStatus('distributing');
 
       // Create and process tasks
-      // Each withdrawal needs: amount + (amount * 0.35%) + 0.006 SOL rent
+      // client.withdraw() takes the amount the recipient receives (not including fees)
+      // Privacy Cash SDK deducts fees from shielded balance internally
       const tasks = selectedWallets.map((index) => {
         const wallet = walletSet.wallets.find(w => w.index === index);
-        const amountWithFees = amountNum * (1 + WITHDRAWAL_FEE_RATE) + WITHDRAWAL_RENT;
         return {
           id: `task-${index}`,
           walletIndex: index,
           walletAddress: wallet?.publicKey || '',
-          amount: Math.floor(amountWithFees * LAMPORTS_PER_SOL),
+          amount: Math.floor(amountNum * LAMPORTS_PER_SOL), // Amount recipient receives
           status: 'pending' as const,
         };
       });
