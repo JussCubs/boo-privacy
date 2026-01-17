@@ -23,6 +23,14 @@ import { getSolanaRpcUrl } from '@/lib/rpc-config';
 import { formatAddress } from '@/lib/hd-wallet';
 import { useBalances } from '@/lib/balance-context';
 import { useCelebration } from '@/lib/celebration-context';
+import {
+  isEmbeddedWallet,
+  getSigningOptions,
+  tryExternalWalletSign,
+  parseSignedTransaction,
+  parseSignedLegacyTransaction,
+} from '@/lib/wallet-signing';
+import { useSolPrice } from '@/lib/use-sol-price';
 import toast from 'react-hot-toast';
 
 // Protocol fee
@@ -37,6 +45,7 @@ export default function FundingPanel() {
 
   const { publicBalance, shieldedBalance, refreshAllBalances, pausePolling, resumePolling } = useBalances();
   const { celebrate } = useCelebration();
+  const { toUsd } = useSolPrice();
 
   const {
     walletSet,
@@ -97,42 +106,22 @@ export default function FundingPanel() {
       const wallet = solanaWalletRef.current;
       if (!wallet) throw new Error('No wallet connected');
 
-      const walletAny = wallet as any;
-      const isEmbeddedWallet = walletAny.walletClientType === 'privy' || walletAny.connectorType === 'embedded';
+      const embedded = isEmbeddedWallet(wallet);
 
-      if (!isEmbeddedWallet && typeof window !== 'undefined') {
-        const providers = [
-          (window as any).phantom?.solana,
-          (window as any).backpack,
-          (window as any).solflare,
-          (window as any).solana,
-        ].filter(Boolean);
-
-        for (const provider of providers) {
-          if (typeof provider.signTransaction === 'function') {
-            try {
-              if (!provider.isConnected && provider.connect) await provider.connect();
-              const signed = await provider.signTransaction(tx);
-              if (!signed.signatures[0].every((b: number) => b === 0)) return signed;
-            } catch {}
-            break;
-          }
-        }
+      // For external wallets, try direct provider signing first
+      if (!embedded) {
+        const externalSigned = await tryExternalWalletSign(tx);
+        if (externalSigned) return externalSigned;
       }
 
+      // Use Privy signing (silent for embedded, with UI for external)
       const signedResult = await signTransactionRef.current({
         transaction: tx.serialize(),
         wallet,
-        options: { uiOptions: { showWalletUIs: !isEmbeddedWallet } },
+        options: getSigningOptions(wallet),
       });
 
-      if (signedResult && typeof signedResult.serialize === 'function') return signedResult as VersionedTransaction;
-      if (signedResult instanceof Uint8Array) return VersionedTransaction.deserialize(signedResult);
-      if ((signedResult as any)?.signedTransaction) {
-        const signed = (signedResult as any).signedTransaction;
-        return VersionedTransaction.deserialize(typeof signed === 'string' ? Buffer.from(signed, 'base64') : signed);
-      }
-      throw new Error('Failed to sign');
+      return parseSignedTransaction(signedResult);
     };
   }, []);
 
@@ -159,7 +148,7 @@ export default function FundingPanel() {
       const { signature } = await signMessageRef.current({
         message: new TextEncoder().encode(PRIVACY_CASH_SIGN_MESSAGE),
         wallet: solanaWallet,
-        options: { uiOptions: { showWalletUIs: false } },
+        options: getSigningOptions(solanaWallet),
       });
       storeEncryptionKey(walletAddress, signature);
       clientRef.current = null;
@@ -219,15 +208,18 @@ export default function FundingPanel() {
       setFundingStatus('distributing');
 
       // Create and process tasks
-      // client.withdraw() takes the amount the recipient receives (not including fees)
-      // Privacy Cash SDK deducts fees from shielded balance internally
+      // Privacy Cash SDK deducts fees FROM the withdrawal amount, so we need to
+      // add fees to ensure recipient gets the full intended amount
+      const perWalletFees = (amountNum * WITHDRAWAL_FEE_RATE) + WITHDRAWAL_RENT;
+      const withdrawAmountPerWallet = amountNum + perWalletFees;
+
       const tasks = selectedWallets.map((index) => {
         const wallet = walletSet.wallets.find(w => w.index === index);
         return {
           id: `task-${index}`,
           walletIndex: index,
           walletAddress: wallet?.publicKey || '',
-          amount: Math.floor(amountNum * LAMPORTS_PER_SOL), // Amount recipient receives
+          amount: Math.floor(withdrawAmountPerWallet * LAMPORTS_PER_SOL), // Amount + fees so recipient gets full amount
           status: 'pending' as const,
         };
       });
@@ -330,7 +322,10 @@ export default function FundingPanel() {
                   {/* Base amount */}
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-white/40">Amount ({walletCount} × {amountNum})</span>
-                    <span className="text-white/60">{baseAmount.toFixed(4)} SOL</span>
+                    <span className="text-white/60">
+                      {baseAmount.toFixed(4)} SOL
+                      {toUsd(baseAmount) && <span className="text-white/30 ml-1">({toUsd(baseAmount)})</span>}
+                    </span>
                   </div>
 
                   {/* Total fees with info tooltip */}
@@ -363,7 +358,12 @@ export default function FundingPanel() {
                         <div className="absolute left-3 -bottom-1.5 w-3 h-3 bg-boo-card border-r border-b border-white/10 transform rotate-45" />
                       </div>
                     </div>
-                    <span className="text-white/60">{(totalWithdrawalFees + (needsShielding ? protocolFee : 0)).toFixed(4)} SOL</span>
+                    <span className="text-white/60">
+                      {(totalWithdrawalFees + (needsShielding ? protocolFee : 0)).toFixed(4)} SOL
+                      {toUsd(totalWithdrawalFees + (needsShielding ? protocolFee : 0)) && (
+                        <span className="text-white/30 ml-1">({toUsd(totalWithdrawalFees + (needsShielding ? protocolFee : 0))})</span>
+                      )}
+                    </span>
                   </div>
 
                   {/* Divider */}
@@ -372,7 +372,12 @@ export default function FundingPanel() {
                     {shieldedBalance > 0 && (
                       <div className="flex items-center justify-between text-sm mb-1">
                         <span className="text-white/40">From shielded</span>
-                        <span className="text-red-400/80">-{Math.min(shieldedBalance, totalWithFees).toFixed(4)} SOL</span>
+                        <span className="text-red-400/80">
+                          -{Math.min(shieldedBalance, totalWithFees).toFixed(4)} SOL
+                          {toUsd(Math.min(shieldedBalance, totalWithFees)) && (
+                            <span className="text-white/30 ml-1">({toUsd(Math.min(shieldedBalance, totalWithFees))})</span>
+                          )}
+                        </span>
                       </div>
                     )}
 
@@ -380,7 +385,10 @@ export default function FundingPanel() {
                     {needsShielding && (
                       <div className="flex items-center justify-between text-sm mb-1">
                         <span className="text-white/40">Need to shield</span>
-                        <span className="text-yellow-400/80">{amountToShield.toFixed(4)} SOL</span>
+                        <span className="text-yellow-400/80">
+                          {amountToShield.toFixed(4)} SOL
+                          {toUsd(amountToShield) && <span className="text-white/30 ml-1">({toUsd(amountToShield)})</span>}
+                        </span>
                       </div>
                     )}
 
@@ -389,6 +397,9 @@ export default function FundingPanel() {
                       <span className="text-white/60">Total from public</span>
                       <span className="text-white">
                         {needsShielding ? totalFromPublic.toFixed(4) : '0.0000'} SOL
+                        {needsShielding && toUsd(totalFromPublic) && (
+                          <span className="text-white/40 font-normal ml-1">({toUsd(totalFromPublic)})</span>
+                        )}
                       </span>
                     </div>
                   </div>

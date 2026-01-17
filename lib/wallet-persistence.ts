@@ -14,6 +14,7 @@ export interface CachedWalletSet {
   createdAt: number;
   lastAccessedAt: number;
   label?: string;
+  archivedIndices?: number[];
 }
 
 export interface WalletCacheMeta {
@@ -100,7 +101,8 @@ function getObfuscationKey(): string {
 export function saveWalletToCache(
   seedPhrase: string,
   walletCount: number,
-  label?: string
+  label?: string,
+  archivedIndices?: number[]
 ): string {
   if (typeof window === 'undefined') return '';
 
@@ -113,6 +115,7 @@ export function saveWalletToCache(
     createdAt: Date.now(),
     lastAccessedAt: Date.now(),
     label,
+    archivedIndices: archivedIndices && archivedIndices.length > 0 ? archivedIndices : undefined,
   };
 
   try {
@@ -162,6 +165,7 @@ export function loadWalletFromCache(cacheKey: string): CachedWalletSet | null {
     return {
       ...cached,
       seedPhrase, // Return deobfuscated
+      archivedIndices: cached.archivedIndices || [],
     };
   } catch (error) {
     console.error('[WalletCache] Failed to load:', error);
@@ -199,6 +203,7 @@ export function getAllCachedWallets(): Array<{
   lastAccessedAt: number;
   label?: string;
   preview: string; // First few chars of seed for identification
+  archivedCount: number;
 }> {
   if (typeof window === 'undefined') return [];
 
@@ -210,6 +215,7 @@ export function getAllCachedWallets(): Array<{
     lastAccessedAt: number;
     label?: string;
     preview: string;
+    archivedCount: number;
   }> = [];
 
   for (const cacheKey of meta.cacheKeys) {
@@ -223,6 +229,7 @@ export function getAllCachedWallets(): Array<{
         lastAccessedAt: cached.lastAccessedAt,
         label: cached.label,
         preview: `${words[0]} ${words[1]} ... ${words[words.length - 1]}`,
+        archivedCount: cached.archivedIndices?.length || 0,
       });
     }
   }
@@ -341,6 +348,29 @@ export function updateCachedWalletLabel(cacheKey: string, label: string): boolea
     return true;
   } catch (error) {
     console.error('[WalletCache] Failed to update label:', error);
+    return false;
+  }
+}
+
+/**
+ * Update the archived indices for an existing cached wallet
+ */
+export function updateCachedWalletArchivedIndices(cacheKey: string, archivedIndices: number[]): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const data = localStorage.getItem(cacheKey);
+    if (!data) return false;
+
+    const cached: CachedWalletSet = JSON.parse(data);
+    cached.archivedIndices = archivedIndices.length > 0 ? archivedIndices : undefined;
+    cached.lastAccessedAt = Date.now();
+
+    localStorage.setItem(cacheKey, JSON.stringify(cached));
+    console.log('[WalletCache] Updated archived indices for wallet');
+    return true;
+  } catch (error) {
+    console.error('[WalletCache] Failed to update archived indices:', error);
     return false;
   }
 }
