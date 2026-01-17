@@ -13,6 +13,11 @@ import {
 } from '@solana/web3.js';
 import { getSolanaRpcUrl } from '@/lib/rpc-config';
 import { useBalances } from '@/lib/balance-context';
+import {
+  isEmbeddedWallet,
+  getSigningOptions,
+  parseSignedLegacyTransaction,
+} from '@/lib/wallet-signing';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 
@@ -104,13 +109,12 @@ export default function Header() {
 
       // Sign transaction
       const serialized = tx.serialize({ requireAllSignatures: false });
-      const walletAny = solanaWallet as any;
-      const isEmbeddedWallet = walletAny.walletClientType === 'privy' || walletAny.connectorType === 'embedded';
+      const embedded = isEmbeddedWallet(solanaWallet);
 
       let signedTx: Transaction;
 
-      // Try external wallet first
-      if (!isEmbeddedWallet && typeof window !== 'undefined') {
+      // Try external wallet first (for non-embedded wallets)
+      if (!embedded && typeof window !== 'undefined') {
         const providers = [
           (window as any).phantom?.solana,
           (window as any).backpack,
@@ -134,31 +138,18 @@ export default function Header() {
           const signedResult = await signTransaction({
             transaction: serialized,
             wallet: solanaWallet,
-            options: { uiOptions: { showWalletUIs: true } },
+            options: getSigningOptions(solanaWallet),
           });
-          if (signedResult instanceof Uint8Array) {
-            signedTx = Transaction.from(signedResult);
-          } else if ((signedResult as any)?.signedTransaction) {
-            const s = (signedResult as any).signedTransaction;
-            signedTx = Transaction.from(typeof s === 'string' ? Buffer.from(s, 'base64') : s);
-          } else {
-            throw new Error('Failed to sign');
-          }
+          signedTx = parseSignedLegacyTransaction(signedResult);
         }
       } else {
+        // Embedded wallet - sign silently via Privy
         const signedResult = await signTransaction({
           transaction: serialized,
           wallet: solanaWallet,
-          options: { uiOptions: { showWalletUIs: true } },
+          options: getSigningOptions(solanaWallet),
         });
-        if (signedResult instanceof Uint8Array) {
-          signedTx = Transaction.from(signedResult);
-        } else if ((signedResult as any)?.signedTransaction) {
-          const s = (signedResult as any).signedTransaction;
-          signedTx = Transaction.from(typeof s === 'string' ? Buffer.from(s, 'base64') : s);
-        } else {
-          throw new Error('Failed to sign');
-        }
+        signedTx = parseSignedLegacyTransaction(signedResult);
       }
 
       const signature = await connection.sendRawTransaction(signedTx!.serialize());

@@ -28,6 +28,14 @@ import {
 import { getSolanaRpcUrl } from '@/lib/rpc-config';
 import { useBalances } from '@/lib/balance-context';
 import { useCelebration } from '@/lib/celebration-context';
+import {
+  isEmbeddedWallet,
+  getSigningOptions,
+  tryExternalWalletSign,
+  parseSignedTransaction,
+  parseSignedLegacyTransaction,
+} from '@/lib/wallet-signing';
+import { useSolPrice } from '@/lib/use-sol-price';
 import toast from 'react-hot-toast';
 
 export default function ShieldPanel() {
@@ -48,6 +56,7 @@ export default function ShieldPanel() {
 
   const { setShieldedBalance } = useBooStore();
   const { celebrate } = useCelebration();
+  const { toUsd } = useSolPrice();
 
   const [amount, setAmount] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -112,60 +121,22 @@ export default function ShieldPanel() {
       const wallet = solanaWalletRef.current;
       if (!wallet) throw new Error('No wallet connected');
 
-      const walletAny = wallet as any;
-      const walletType = walletAny.walletClientType || walletAny.walletClient?.name || walletAny.type || 'unknown';
-      const connectorType = walletAny.connectorType || walletAny.connector?.name || 'unknown';
-      const isEmbeddedWallet = walletType === 'privy' || connectorType === 'embedded';
+      const embedded = isEmbeddedWallet(wallet);
 
-      // Try direct wallet signing for external wallets
-      if (!isEmbeddedWallet && typeof window !== 'undefined') {
-        const walletProviders = [
-          { name: 'Phantom', provider: (window as any).phantom?.solana, check: (p: any) => p?.isPhantom },
-          { name: 'Backpack', provider: (window as any).backpack, check: (p: any) => p?.isBackpack },
-          { name: 'Solflare', provider: (window as any).solflare, check: (p: any) => p?.isSolflare },
-          { name: 'Solana', provider: (window as any).solana, check: () => true },
-        ];
-
-        for (const { provider, check } of walletProviders) {
-          if (provider && check(provider) && typeof provider.signTransaction === 'function') {
-            try {
-              if (!provider.isConnected && typeof provider.connect === 'function') {
-                await provider.connect();
-              }
-              const signedTx = await provider.signTransaction(tx);
-              if (!signedTx.signatures[0].every((b: number) => b === 0)) {
-                return signedTx;
-              }
-            } catch {}
-            break;
-          }
-        }
+      // For external wallets, try direct provider signing first
+      if (!embedded) {
+        const externalSigned = await tryExternalWalletSign(tx);
+        if (externalSigned) return externalSigned;
       }
 
-      // Fall back to Privy
-      const serialized = tx.serialize();
+      // Use Privy signing (silent for embedded, with UI for external)
       const signedResult = await signTransactionRef.current({
-        transaction: serialized,
-        wallet: wallet,
-        options: { uiOptions: { showWalletUIs: true } },
+        transaction: tx.serialize(),
+        wallet,
+        options: getSigningOptions(wallet),
       });
 
-      if (signedResult && typeof signedResult.serialize === 'function') {
-        return signedResult as VersionedTransaction;
-      } else if (signedResult instanceof Uint8Array) {
-        return VersionedTransaction.deserialize(signedResult);
-      } else if (signedResult && (signedResult as any).signedTransaction) {
-        const signed = (signedResult as any).signedTransaction;
-        if (typeof signed === 'string') {
-          return VersionedTransaction.deserialize(Buffer.from(signed, 'base64'));
-        } else if (signed instanceof Uint8Array) {
-          return VersionedTransaction.deserialize(signed);
-        } else if (typeof signed.serialize === 'function') {
-          return signed as VersionedTransaction;
-        }
-      }
-
-      throw new Error('Failed to sign transaction');
+      return parseSignedTransaction(signedResult);
     };
   }, []);
 
@@ -199,7 +170,7 @@ export default function ShieldPanel() {
       const { signature } = await signMessageRef.current({
         message: messageBytes,
         wallet: wallet,
-        options: { uiOptions: { showWalletUIs: false } },
+        options: getSigningOptions(wallet),
       });
 
       storeEncryptionKey(walletAddressRef.current, signature);
@@ -253,19 +224,10 @@ export default function ShieldPanel() {
           const signedFeeResult = await signTransactionRef.current({
             transaction: serializedFee,
             wallet: wallet,
-            options: { uiOptions: { showWalletUIs: true } },
+            options: getSigningOptions(wallet),
           });
 
-          let signedFeeTx: Transaction;
-          if (signedFeeResult instanceof Uint8Array) {
-            signedFeeTx = Transaction.from(signedFeeResult);
-          } else if (signedFeeResult && (signedFeeResult as any).signedTransaction) {
-            const signed = (signedFeeResult as any).signedTransaction;
-            signedFeeTx = Transaction.from(typeof signed === 'string' ? Buffer.from(signed, 'base64') : signed);
-          } else {
-            throw new Error('Failed to sign fee transaction');
-          }
-
+          const signedFeeTx = parseSignedLegacyTransaction(signedFeeResult);
           const feeSignature = await connection.sendRawTransaction(signedFeeTx.serialize());
           await connection.confirmTransaction({ signature: feeSignature, blockhash, lastValidBlockHeight }, 'confirmed');
         }
@@ -279,7 +241,9 @@ export default function ShieldPanel() {
         celebrate('shield', 8);
       } else {
         setProcessingStatus('Generating ZK proof...');
-        const lamports = Math.floor(amountNum * LAMPORTS_PER_SOL);
+        // Add withdrawal fees so recipient receives the full intended amount
+        // (Privacy Cash SDK deducts fees from the withdrawal amount)
+        const lamports = Math.floor((amountNum + withdrawalFees) * LAMPORTS_PER_SOL);
         const client = await getClientAsync();
         await client.withdraw(lamports, walletAddressRef.current);
 
@@ -340,6 +304,9 @@ export default function ShieldPanel() {
               <div className={`text-lg font-bold tabular-nums ${mode === 'shield' ? 'text-yellow-400' : 'text-white/60'}`}>
                 {publicBalance.toFixed(4)}
               </div>
+              {publicBalance > 0 && toUsd(publicBalance) && (
+                <div className="text-[10px] text-white/30 mt-0.5">{toUsd(publicBalance)}</div>
+              )}
             </button>
             <button
               onClick={() => setMode('unshield')}
@@ -353,6 +320,9 @@ export default function ShieldPanel() {
               <div className={`text-lg font-bold tabular-nums ${mode === 'unshield' ? 'text-red-400' : 'text-white/60'}`}>
                 {shieldedBalance.toFixed(4)}
               </div>
+              {shieldedBalance > 0 && toUsd(shieldedBalance) && (
+                <div className="text-[10px] text-white/30 mt-0.5">{toUsd(shieldedBalance)}</div>
+              )}
             </button>
           </div>
         </div>
