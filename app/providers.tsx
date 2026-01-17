@@ -9,6 +9,7 @@ import { getSolanaRpcUrl, getSolanaWebSocketUrl } from '@/lib/rpc-config';
 import { patchFetchForPrivacyCash } from '@/lib/fetch-interceptor';
 import { BalanceProvider } from '@/lib/balance-context';
 import { CelebrationProvider } from '@/lib/celebration-context';
+import RiskWarningProvider from '@/components/RiskWarningProvider';
 
 // Initialize Solana wallet connectors (Phantom, Solflare, etc.)
 const solanaConnectors = toSolanaWalletConnectors({
@@ -89,11 +90,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
         loginMethods: ['wallet', 'email'],
       }}
     >
-      <CelebrationProvider>
-        <BalanceProvider>
-          {children}
-        </BalanceProvider>
-      </CelebrationProvider>
+      <RiskWarningProvider>
+        <CelebrationProvider>
+          <BalanceProvider>
+            {children}
+          </BalanceProvider>
+        </CelebrationProvider>
+      </RiskWarningProvider>
       <Toaster
         position="top-right"
         toastOptions={{
