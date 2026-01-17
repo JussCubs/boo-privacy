@@ -24,6 +24,13 @@ export default function RiskWarningProvider({ children }: RiskWarningProviderPro
     }
   }, [ready, authenticated, hasChecked]);
 
+  // Reset hasChecked when user logs out so the warning can show on next login
+  useEffect(() => {
+    if (!authenticated) {
+      setHasChecked(false);
+    }
+  }, [authenticated]);
+
   const handleAccept = () => {
     setShowWarning(false);
   };
