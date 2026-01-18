@@ -142,6 +142,11 @@ export function BalanceProvider({ children }: { children: React.ReactNode }) {
   const clientRef = useRef<PrivacyCashClient | null>(null);
   const connectionRef = useRef<Connection | null>(null);
 
+  // Invalidate cached client when wallet address changes
+  useEffect(() => {
+    clientRef.current = null;
+  }, [walletAddress]);
+
   // Get or create connection
   const getConnection = useCallback(() => {
     if (!connectionRef.current) {

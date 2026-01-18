@@ -89,6 +89,11 @@ export default function ShieldPanel() {
     walletAddressRef.current = walletAddress;
   });
 
+  // Invalidate cached client when wallet address changes
+  useEffect(() => {
+    clientRef.current = null;
+  }, [walletAddress]);
+
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);

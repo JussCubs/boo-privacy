@@ -143,6 +143,27 @@ export function isEmbeddedWallet(wallet: any): boolean {
     walletKeys: Object.keys(wallet || {}),
   });
 
+  // IMPORTANT: Check if an external wallet provider is connected FIRST
+  // This must come before the walletClientType === 'privy' check because
+  // when Privy creates a separate embedded wallet while an external wallet (like Phantom)
+  // is connected, we need to use external signing even though the Privy wallet
+  // has walletClientType === 'privy'
+  const externalProvider = getConnectedExternalProvider();
+  if (externalProvider && externalProvider.isConnected) {
+    const providerAddress = externalProvider.publicKey?.toString();
+    console.log('[WalletSigning] Found connected external provider:', {
+      providerAddress: providerAddress?.slice(0, 8) + '...',
+      walletAddress: wallet.address?.slice(0, 8) + '...',
+      addressesMatch: providerAddress === wallet.address,
+    });
+
+    // If external provider is connected, use external signing
+    // The addresses might not match if Privy created a separate embedded wallet
+    // but we should still use the external wallet for signing
+    console.log('[WalletSigning] External provider connected - treating as external wallet');
+    return false;
+  }
+
   // Privy embedded wallets have walletClientType === 'privy'
   if (walletClientType === 'privy') {
     console.log('[WalletSigning] Detected embedded wallet (privy)');
@@ -163,25 +184,6 @@ export function isEmbeddedWallet(wallet: any): boolean {
 
   if (isExternal) {
     console.log('[WalletSigning] Detected external wallet from type indicators');
-    return false;
-  }
-
-  // Check if an external wallet provider is connected
-  // If ANY external provider is connected, we should use external signing
-  // (even if the Privy wallet address doesn't match - that just means Privy created a separate embedded wallet)
-  const externalProvider = getConnectedExternalProvider();
-  if (externalProvider && externalProvider.isConnected) {
-    const providerAddress = externalProvider.publicKey?.toString();
-    console.log('[WalletSigning] Found connected external provider:', {
-      providerAddress: providerAddress?.slice(0, 8) + '...',
-      walletAddress: wallet.address?.slice(0, 8) + '...',
-      addressesMatch: providerAddress === wallet.address,
-    });
-
-    // If external provider is connected, use external signing
-    // The addresses might not match if Privy created a separate embedded wallet
-    // but we should still use the external wallet for signing
-    console.log('[WalletSigning] External provider connected - treating as external wallet');
     return false;
   }
 

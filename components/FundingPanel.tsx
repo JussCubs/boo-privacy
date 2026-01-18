@@ -82,6 +82,11 @@ export default function FundingPanel() {
     solanaWalletRef.current = solanaWallet;
   });
 
+  // Invalidate cached client when wallet address changes
+  useEffect(() => {
+    clientRef.current = null;
+  }, [walletAddress]);
+
   // Calculate amounts
   const amountNum = parseFloat(amountPerWallet) || 0;
   const walletCount = selectedWallets.length;
