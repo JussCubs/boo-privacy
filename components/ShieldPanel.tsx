@@ -31,7 +31,10 @@ import { useCelebration } from '@/lib/celebration-context';
 import {
   isEmbeddedWallet,
   getSigningOptions,
+  getActiveWalletAddress,
   tryExternalWalletSign,
+  tryExternalWalletSignMessage,
+  tryExternalWalletSignLegacyTransaction,
   parseSignedTransaction,
   parseSignedLegacyTransaction,
 } from '@/lib/wallet-signing';
@@ -69,7 +72,8 @@ export default function ShieldPanel() {
 
   const loadingBalance = loadingPublic || loadingShielded;
 
-  const walletAddress = user?.wallet?.address || solanaWallets[0]?.address || '';
+  // Get the active wallet address (prefers connected external wallet like Phantom)
+  const walletAddress = getActiveWalletAddress(solanaWallets, user);
   const solanaWallet = solanaWallets[0];
 
   const clientRef = useRef<PrivacyCashClient | null>(null);
@@ -122,21 +126,31 @@ export default function ShieldPanel() {
       if (!wallet) throw new Error('No wallet connected');
 
       const embedded = isEmbeddedWallet(wallet);
+      console.log('[ShieldPanel] Signing transaction, embedded:', embedded);
 
       // For external wallets, try direct provider signing first
       if (!embedded) {
+        console.log('[ShieldPanel] Trying external wallet signing...');
         const externalSigned = await tryExternalWalletSign(tx);
-        if (externalSigned) return externalSigned;
+        if (externalSigned) {
+          console.log('[ShieldPanel] External wallet signing succeeded');
+          return externalSigned;
+        }
+        console.log('[ShieldPanel] External wallet signing failed, trying Privy fallback...');
       }
 
       // Use Privy signing (silent for embedded, with UI for external)
+      console.log('[ShieldPanel] Using Privy signTransaction...');
       const signedResult = await signTransactionRef.current({
         transaction: tx.serialize(),
         wallet,
         options: getSigningOptions(wallet),
       });
 
-      return parseSignedTransaction(signedResult);
+      console.log('[ShieldPanel] Privy signTransaction returned:', typeof signedResult);
+      const parsed = parseSignedTransaction(signedResult);
+      console.log('[ShieldPanel] Parsed transaction, signatures count:', parsed.signatures?.length);
+      return parsed;
     };
   }, []);
 
@@ -167,11 +181,32 @@ export default function ShieldPanel() {
     setInitializing(true);
     try {
       const messageBytes = new TextEncoder().encode(PRIVACY_CASH_SIGN_MESSAGE);
-      const { signature } = await signMessageRef.current({
-        message: messageBytes,
-        wallet: wallet,
-        options: getSigningOptions(wallet),
-      });
+      const embedded = isEmbeddedWallet(wallet);
+      let signature: string;
+
+      // For external wallets, try direct provider signing first
+      if (!embedded) {
+        const externalSig = await tryExternalWalletSignMessage(messageBytes);
+        if (externalSig) {
+          signature = externalSig;
+        } else {
+          // Fallback to Privy signing with UI
+          const { signature: privySig } = await signMessageRef.current({
+            message: messageBytes,
+            wallet: wallet,
+            options: getSigningOptions(wallet),
+          });
+          signature = privySig;
+        }
+      } else {
+        // Embedded wallet - sign silently via Privy
+        const { signature: privySig } = await signMessageRef.current({
+          message: messageBytes,
+          wallet: wallet,
+          options: getSigningOptions(wallet),
+        });
+        signature = privySig;
+      }
 
       storeEncryptionKey(walletAddressRef.current, signature);
       clientRef.current = null;
@@ -220,14 +255,35 @@ export default function ShieldPanel() {
             })
           );
 
-          const serializedFee = feeTx.serialize({ requireAllSignatures: false });
-          const signedFeeResult = await signTransactionRef.current({
-            transaction: serializedFee,
-            wallet: wallet,
-            options: getSigningOptions(wallet),
-          });
+          const embedded = isEmbeddedWallet(wallet);
+          let signedFeeTx: Transaction;
 
-          const signedFeeTx = parseSignedLegacyTransaction(signedFeeResult);
+          // For external wallets, try direct provider signing first
+          if (!embedded) {
+            const externalSigned = await tryExternalWalletSignLegacyTransaction(feeTx);
+            if (externalSigned) {
+              signedFeeTx = externalSigned;
+            } else {
+              // Fallback to Privy signing with UI
+              const serializedFee = feeTx.serialize({ requireAllSignatures: false });
+              const signedFeeResult = await signTransactionRef.current({
+                transaction: serializedFee,
+                wallet: wallet,
+                options: getSigningOptions(wallet),
+              });
+              signedFeeTx = parseSignedLegacyTransaction(signedFeeResult);
+            }
+          } else {
+            // Embedded wallet - sign silently via Privy
+            const serializedFee = feeTx.serialize({ requireAllSignatures: false });
+            const signedFeeResult = await signTransactionRef.current({
+              transaction: serializedFee,
+              wallet: wallet,
+              options: getSigningOptions(wallet),
+            });
+            signedFeeTx = parseSignedLegacyTransaction(signedFeeResult);
+          }
+
           const feeSignature = await connection.sendRawTransaction(signedFeeTx.serialize());
           await connection.confirmTransaction({ signature: feeSignature, blockhash, lastValidBlockHeight }, 'confirmed');
         }
