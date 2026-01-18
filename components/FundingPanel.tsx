@@ -26,7 +26,10 @@ import { useCelebration } from '@/lib/celebration-context';
 import {
   isEmbeddedWallet,
   getSigningOptions,
+  getActiveWalletAddress,
   tryExternalWalletSign,
+  tryExternalWalletSignMessage,
+  tryExternalWalletSignLegacyTransaction,
   parseSignedTransaction,
   parseSignedLegacyTransaction,
 } from '@/lib/wallet-signing';
@@ -60,7 +63,8 @@ export default function FundingPanel() {
     updateFundingTask,
   } = useBooStore();
 
-  const walletAddress = user?.wallet?.address || solanaWallets[0]?.address || '';
+  // Get the active wallet address (prefers connected external wallet like Phantom)
+  const walletAddress = getActiveWalletAddress(solanaWallets, user);
   const solanaWallet = solanaWallets[0];
 
   const [isShielding, setIsShielding] = useState(false);
@@ -77,6 +81,11 @@ export default function FundingPanel() {
     signMessageRef.current = signMessage;
     solanaWalletRef.current = solanaWallet;
   });
+
+  // Invalidate cached client when wallet address changes
+  useEffect(() => {
+    clientRef.current = null;
+  }, [walletAddress]);
 
   // Calculate amounts
   const amountNum = parseFloat(amountPerWallet) || 0;
@@ -107,21 +116,31 @@ export default function FundingPanel() {
       if (!wallet) throw new Error('No wallet connected');
 
       const embedded = isEmbeddedWallet(wallet);
+      console.log('[FundingPanel] Signing transaction, embedded:', embedded);
 
       // For external wallets, try direct provider signing first
       if (!embedded) {
+        console.log('[FundingPanel] Trying external wallet signing...');
         const externalSigned = await tryExternalWalletSign(tx);
-        if (externalSigned) return externalSigned;
+        if (externalSigned) {
+          console.log('[FundingPanel] External wallet signing succeeded');
+          return externalSigned;
+        }
+        console.log('[FundingPanel] External wallet signing failed, trying Privy fallback...');
       }
 
       // Use Privy signing (silent for embedded, with UI for external)
+      console.log('[FundingPanel] Using Privy signTransaction...');
       const signedResult = await signTransactionRef.current({
         transaction: tx.serialize(),
         wallet,
         options: getSigningOptions(wallet),
       });
 
-      return parseSignedTransaction(signedResult);
+      console.log('[FundingPanel] Privy signTransaction returned:', typeof signedResult);
+      const parsed = parseSignedTransaction(signedResult);
+      console.log('[FundingPanel] Parsed transaction, signatures count:', parsed.signatures?.length);
+      return parsed;
     };
   }, []);
 
@@ -145,11 +164,34 @@ export default function FundingPanel() {
     if (!solanaWallet) return false;
 
     try {
-      const { signature } = await signMessageRef.current({
-        message: new TextEncoder().encode(PRIVACY_CASH_SIGN_MESSAGE),
-        wallet: solanaWallet,
-        options: getSigningOptions(solanaWallet),
-      });
+      const messageBytes = new TextEncoder().encode(PRIVACY_CASH_SIGN_MESSAGE);
+      const embedded = isEmbeddedWallet(solanaWallet);
+      let signature: string;
+
+      // For external wallets, try direct provider signing first
+      if (!embedded) {
+        const externalSig = await tryExternalWalletSignMessage(messageBytes);
+        if (externalSig) {
+          signature = externalSig;
+        } else {
+          // Fallback to Privy signing with UI
+          const { signature: privySig } = await signMessageRef.current({
+            message: messageBytes,
+            wallet: solanaWallet,
+            options: getSigningOptions(solanaWallet),
+          });
+          signature = privySig;
+        }
+      } else {
+        // Embedded wallet - sign silently via Privy
+        const { signature: privySig } = await signMessageRef.current({
+          message: messageBytes,
+          wallet: solanaWallet,
+          options: getSigningOptions(solanaWallet),
+        });
+        signature = privySig;
+      }
+
       storeEncryptionKey(walletAddress, signature);
       clientRef.current = null;
       return true;
@@ -192,9 +234,36 @@ export default function FundingPanel() {
           feeTx.recentBlockhash = blockhash;
           feeTx.feePayer = new PublicKey(walletAddress);
 
-          const signer = createTransactionSigner();
-          const signedTx = await signer(new VersionedTransaction(feeTx.compileMessage()));
-          const sig = await connection.sendRawTransaction(signedTx.serialize());
+          const embedded = isEmbeddedWallet(solanaWallet);
+          let signedFeeTx: Transaction;
+
+          // For external wallets, try direct provider signing first
+          if (!embedded) {
+            const externalSigned = await tryExternalWalletSignLegacyTransaction(feeTx);
+            if (externalSigned) {
+              signedFeeTx = externalSigned;
+            } else {
+              // Fallback to Privy signing with UI
+              const serializedFee = feeTx.serialize({ requireAllSignatures: false });
+              const signedFeeResult = await signTransactionRef.current({
+                transaction: serializedFee,
+                wallet: solanaWallet,
+                options: getSigningOptions(solanaWallet),
+              });
+              signedFeeTx = parseSignedLegacyTransaction(signedFeeResult);
+            }
+          } else {
+            // Embedded wallet - sign silently via Privy
+            const serializedFee = feeTx.serialize({ requireAllSignatures: false });
+            const signedFeeResult = await signTransactionRef.current({
+              transaction: serializedFee,
+              wallet: solanaWallet,
+              options: getSigningOptions(solanaWallet),
+            });
+            signedFeeTx = parseSignedLegacyTransaction(signedFeeResult);
+          }
+
+          const sig = await connection.sendRawTransaction(signedFeeTx.serialize());
           await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
         }
 

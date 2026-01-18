@@ -16,6 +16,8 @@ import { useBalances } from '@/lib/balance-context';
 import {
   isEmbeddedWallet,
   getSigningOptions,
+  getActiveWalletAddress,
+  tryExternalWalletSignLegacyTransaction,
   parseSignedLegacyTransaction,
 } from '@/lib/wallet-signing';
 import Image from 'next/image';
@@ -35,7 +37,8 @@ export default function Header() {
   const [sending, setSending] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const walletAddress = user?.wallet?.address || solanaWallets[0]?.address || '';
+  // Get the active wallet address (prefers connected external wallet like Phantom)
+  const walletAddress = getActiveWalletAddress(solanaWallets, user);
   const solanaWallet = solanaWallets[0];
 
   // Close dropdown when clicking outside
@@ -108,33 +111,17 @@ export default function Header() {
       );
 
       // Sign transaction
-      const serialized = tx.serialize({ requireAllSignatures: false });
       const embedded = isEmbeddedWallet(solanaWallet);
-
       let signedTx: Transaction;
 
-      // Try external wallet first (for non-embedded wallets)
-      if (!embedded && typeof window !== 'undefined') {
-        const providers = [
-          (window as any).phantom?.solana,
-          (window as any).backpack,
-          (window as any).solflare,
-          (window as any).solana,
-        ].filter(Boolean);
-
-        let signed = false;
-        for (const provider of providers) {
-          if (typeof provider.signTransaction === 'function') {
-            try {
-              if (!provider.isConnected && provider.connect) await provider.connect();
-              signedTx = await provider.signTransaction(tx);
-              signed = true;
-              break;
-            } catch {}
-          }
-        }
-
-        if (!signed) {
+      // For external wallets, try direct provider signing first
+      if (!embedded) {
+        const externalSigned = await tryExternalWalletSignLegacyTransaction(tx);
+        if (externalSigned) {
+          signedTx = externalSigned;
+        } else {
+          // Fallback to Privy signing with UI
+          const serialized = tx.serialize({ requireAllSignatures: false });
           const signedResult = await signTransaction({
             transaction: serialized,
             wallet: solanaWallet,
@@ -144,6 +131,7 @@ export default function Header() {
         }
       } else {
         // Embedded wallet - sign silently via Privy
+        const serialized = tx.serialize({ requireAllSignatures: false });
         const signedResult = await signTransaction({
           transaction: serialized,
           wallet: solanaWallet,

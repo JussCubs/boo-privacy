@@ -10,9 +10,12 @@ import { patchFetchForPrivacyCash } from '@/lib/fetch-interceptor';
 import { BalanceProvider } from '@/lib/balance-context';
 import { CelebrationProvider } from '@/lib/celebration-context';
 
-// Initialize Solana wallet connectors (Phantom, Solflare, etc.)
+// Initialize Solana wallet connectors with preferred order
+// Popular Solana wallets (Phantom, Backpack, Solflare) at the top
 const solanaConnectors = toSolanaWalletConnectors({
   shouldAutoConnect: true,
+  // Prioritize wallets by order - first ones appear at top
+  walletOrder: ['detected', 'phantom', 'backpack', 'solflare', 'glow', 'coinbase_wallet'],
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {

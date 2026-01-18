@@ -20,6 +20,7 @@ import {
 import { getSolanaRpcUrl } from '@/lib/rpc-config';
 import { TOKENS, TOKEN_SYMBOLS, TokenSymbol, parseTokenAmount } from '@/lib/tokens';
 import { fetchTokenPrices, TokenPrices, getCachedPrices, calculateUsdValue } from '@/lib/prices';
+import { getActiveWalletAddress } from '@/lib/wallet-signing';
 
 // Polling intervals
 const BALANCE_POLL_INTERVAL = 15000; // 15 seconds
@@ -109,7 +110,8 @@ export function BalanceProvider({ children }: { children: React.ReactNode }) {
     setShieldedBalance: setStoreShieldedBalance,
   } = useBooStore();
 
-  const walletAddress = user?.wallet?.address || solanaWallets[0]?.address || '';
+  // Get the active wallet address (prefers connected external wallet like Phantom)
+  const walletAddress = getActiveWalletAddress(solanaWallets, user);
 
   // Token balances state
   const [tokenBalances, setTokenBalances] = useState<TokenBalances>(defaultTokenBalances);
@@ -139,6 +141,11 @@ export function BalanceProvider({ children }: { children: React.ReactNode }) {
   // Refs
   const clientRef = useRef<PrivacyCashClient | null>(null);
   const connectionRef = useRef<Connection | null>(null);
+
+  // Invalidate cached client when wallet address changes
+  useEffect(() => {
+    clientRef.current = null;
+  }, [walletAddress]);
 
   // Get or create connection
   const getConnection = useCallback(() => {
